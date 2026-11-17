@@ -1,0 +1,60 @@
+name: win2022-egress
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Runtime in minutes (clamped to 350)"
+        required: false
+        default: "350"
+      enable_rdp:
+        description: "Enable RDP over the tailnet (true/false)"
+        required: false
+        default: "true"
+      proxy_user:
+        description: "Optional proxy username (empty = no auth)"
+        required: false
+        default: ""
+      proxy_pass:
+        description: "Optional proxy password (empty = no auth)"
+        required: false
+        default: ""
+
+concurrency:
+  group: win2022-egress
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  egress:
+    name: Windows Server 2022 egress node
+    runs-on: windows-2022
+    timeout-minutes: 355
+
+    env:
+      RUN_MINUTES: ${{ github.event.inputs.minutes }}
+      ENABLE_RDP: ${{ github.event.inputs.enable_rdp }}
+      PROXY_USER: ${{ github.event.inputs.proxy_user }}
+      PROXY_PASS: ${{ github.event.inputs.proxy_pass }}
+      TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+      TS_HOSTNAME: ${{ vars.TS_HOSTNAME || 'win-runner' }}
+      RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Report runner
+        shell: pwsh
+        run: |
+          "OS      : $((Get-CimInstance Win32_OperatingSystem).Caption)"
+          "Build   : $((Get-CimInstance Win32_OperatingSystem).BuildNumber)"
+          "CPU     : $((Get-CimInstance Win32_Processor).NumberOfLogicalProcessors) logical"
+          "RAM(GB) : $([math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory/1GB,1))"
+          "Net     : $((Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike '127.*' }).IPAddress -join ', ')"
+
+      - name: Bring up egress node
+        shell: pwsh
+        run: ./scripts/setup-runner.ps1
